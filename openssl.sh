@@ -6,6 +6,9 @@ ntrusted=0
 declare -A CAs 
 declare -A verify_errors
 
+#retrieve array of TLS IPv4 addrs
+#ipv4_addrs=($(python -c'from parse_tls_sites import form_sites; form_sites(0, 50000)' | tr -d '[],'))
+
 outfile="a.txt"
 # get TLS version from arg
 die () {
@@ -28,6 +31,7 @@ rm -f $outfile
 #self-signed.badssl.com 
 declare -a servers=("expired.badssl.com")
 
+#for server in ${ipv4_addrs[@]}; do
 for server in ${servers[@]}; do
     echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
     echo | openssl s_client -connect $server:443 -servername $server \
@@ -62,9 +66,7 @@ for server in ${servers[@]}; do
     fi
     
     # if got this far, it's trusted
-    # record CAs
-
-    
+    # TODO: record CAs
 done
 
 # assuming every successful handshake produces a leaf cert 
