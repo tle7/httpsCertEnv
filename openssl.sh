@@ -7,7 +7,7 @@ declare -A CAs
 declare -A verify_errors
 
 #retrieve array of TLS IPv4 addrs
-ipv4_addrs=($(python3 -c'from parse_tls_sites import form_sites; form_sites(0, 12)' | tr -d '[],'))
+ipv4_addrs=($(python3 -c'from parse_tls_sites import form_sites; form_sites(0, 200)' | tr -d '[],'))
 
 outfile="a.txt"
 stats_file="intermed_stats.txt"
