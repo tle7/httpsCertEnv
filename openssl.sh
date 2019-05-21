@@ -7,9 +7,10 @@ declare -A CAs
 declare -A verify_errors
 
 #retrieve array of TLS IPv4 addrs
-ipv4_addrs=($(python3 -c'from parse_tls_sites import form_sites; form_sites(0, 50000)' | tr -d '[],'))
+ipv4_addrs=($(python3 -c'from parse_tls_sites import form_sites; form_sites(0, 12)' | tr -d '[],'))
 
 outfile="a.txt"
+stats_file="intermed_stats.txt"
 # get TLS version from arg
 die () {
     echo >&2 "$@"
@@ -23,18 +24,21 @@ else
 fi
 
 rm -f $outfile 
+rm -f $stats_file
 #declare -a servers=("github.com" "www.google.com") 
 #declare -a servers=("github.com")
 #declare -a servers=("192.30.255.113") # github
 #declare -a servers=("feistyduck.com")
 #declare -a servers=("104.154.89.105") # same for all badssl according to nc
 #self-signed.badssl.com 
-declare -a servers=("expired.badssl.com")
+#declare -a servers=("expired.badssl.com")
 
 for server in ${ipv4_addrs[@]}; do
 #for server in ${servers[@]}; do
-    echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
-    echo | openssl s_client -connect $server:443 -servername $server \
+    curr_ip=`echo $server | sed -e "s/'//g"`
+    echo "curr_ip: $curr_ip"
+    #echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
+    echo | openssl s_client -connect $curr_ip:443 -servername $curr_ip \
         -$tls_version -CAfile /etc/ssl/certs/ca-certificates.crt \
         -verify $verification_depth \
         -showcerts &>> $outfile 
@@ -44,6 +48,7 @@ for server in ${ipv4_addrs[@]}; do
     # handshake attempted
     let nhandshakes_attempted+=1
     
+    echo "nhandshakes_attempted: $nhandshakes_attempted, nleaf: $nleaf, ntrusted: $ntrusted \n" > $stats_file 
     # handshake succeeded
     if grep --quiet "BEGIN CERTIFICATE" $outfile; then # tested, at least for feistyduck.com
         let nleaf+=1
