@@ -41,7 +41,7 @@ for server in ${ipv4_addrs[@]}; do
     echo | openssl s_client -connect $curr_ip:443 -servername $curr_ip \
         -$tls_version -CAfile /etc/ssl/certs/ca-certificates.crt \
         -verify $verification_depth \
-        -showcerts &>> $outfile 
+        &>> $outfile 
     # will this ever crash e.g. if handshake fails for a given server?
     # TODO: echo separates openssl from shell - need to make sure it's done before parse the output 
     
