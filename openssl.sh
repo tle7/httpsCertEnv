@@ -7,7 +7,7 @@ declare -A CAs
 declare -A verify_errors
 
 #retrieve array of TLS IPv4 addrs
-#ipv4_addrs=($(python -c'from parse_tls_sites import form_sites; form_sites(0, 50000)' | tr -d '[],'))
+ipv4_addrs=($(python3 -c'from parse_tls_sites import form_sites; form_sites(0, 50000)' | tr -d '[],'))
 
 outfile="a.txt"
 # get TLS version from arg
@@ -31,8 +31,8 @@ rm -f $outfile
 #self-signed.badssl.com 
 declare -a servers=("expired.badssl.com")
 
-#for server in ${ipv4_addrs[@]}; do
-for server in ${servers[@]}; do
+for server in ${ipv4_addrs[@]}; do
+#for server in ${servers[@]}; do
     echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
     echo | openssl s_client -connect $server:443 -servername $server \
         -$tls_version -CAfile /etc/ssl/certs/ca-certificates.crt \
