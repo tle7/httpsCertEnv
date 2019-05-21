@@ -37,7 +37,7 @@ for server in ${ipv4_addrs[@]}; do
 #for server in ${servers[@]}; do
     curr_ip=`echo $server | sed -e "s/'//g"`
     echo "curr_ip: $curr_ip"
-    #echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
+    echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
     echo | openssl s_client -connect $curr_ip:443 -servername $curr_ip \
         -$tls_version -CAfile /etc/ssl/certs/ca-certificates.crt \
         -verify $verification_depth \
