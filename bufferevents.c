@@ -54,7 +54,7 @@ struct bufferevent *handshake() {
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(inet_addr("192.30.255.113")); // github 
+    sin.sin_addr.s_addr = inet_addr("192.30.255.113"); // github 
     sin.sin_port = htons(443);
 
     // get initial SSL*
@@ -62,9 +62,8 @@ struct bufferevent *handshake() {
     // specifying version is deprecated...can't do TLS 1.3?
     SSL *ssl = SSL_new(ssl_context); // have to start somewhere...
     struct bufferevent *bev = bufferevent_openssl_socket_new(eb, -1, ssl, 
-            // TODO: make socket nonblocking w/ evutil_make_socket_nonblocking)
 			BUFFEREVENT_SSL_CONNECTING,
-			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS); 
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS ); 
     if (!bev) {
         printf("error in openssl_socket_new\n");
     }
@@ -74,7 +73,7 @@ struct bufferevent *handshake() {
     printf("after setting cb\n");
     // connect to socket (this makes it nonblocking)
     int fd = bufferevent_socket_connect(bev, (struct sockaddr *)&sin, sizeof(sin));
-    if (fd < 1) { 
+    if (fd == -1) { // returns 0 on success 
         /* Error starting connection */ 
         printf("error connecting to socket\n");
         bufferevent_free(bev);
@@ -82,7 +81,7 @@ struct bufferevent *handshake() {
     } else {
         printf("connected to socket\n");
     }
-    //bufferevent_setfd(bev, fd);
+    //bufferevent_setfd(bev, fd); // TODO
     event_base_dispatch(eb);
     // event_base_loop(eb);  // runs until no more events, or call break/edit
     return bev;
