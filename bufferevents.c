@@ -20,6 +20,8 @@
 
 #include "get_tls_sites.h"
 
+#define NUM_TLS_INS 2
+
 // TODO: lots of frees, error-catching probably 
 
 int verify(X509 *leaf_cert) {
@@ -58,8 +60,7 @@ void eventcb(struct bufferevent *bev, short events, void *ptr) {
 
 }
 
-
-void handshake(char *ip, struct event_base *base) {
+void handshake_ip(char *ip, struct event_base *base) {
      // get initial SSL*: only works if each one has their own
     SSL_CTX *ssl_context = SSL_CTX_new(TLS_client_method()); 
     // specifying version is deprecated...can't do TLS 1.3?
@@ -91,6 +92,39 @@ void handshake(char *ip, struct event_base *base) {
     }
 }
 
+void handshake(struct sockaddr_in *sin, struct event_base *base) {
+     // get initial SSL*: only works if each one has their own
+    SSL_CTX *ssl_context = SSL_CTX_new(TLS_client_method()); 
+    // specifying version is deprecated...can't do TLS 1.3?
+    SSL *ssl = SSL_new(ssl_context); // have to start somewhere...
+    // setup socket
+    /*
+    struct sockaddr_in sin;
+    memset(&sin, 0, sizeof(sin)); // perhaps pre-compute this: array of sockaddrs instead of IPs?
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = inet_addr(ip); // github 
+    sin.sin_port = htons(443);
+    */
+    struct bufferevent *bev = bufferevent_openssl_socket_new(base, -1, ssl, 
+			BUFFEREVENT_SSL_CONNECTING,
+			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS); 
+    if (!bev) {
+        printf("error in openssl_socket_new with ip\n");
+    }
+   
+    // set callback
+    bufferevent_setcb(bev, NULL, NULL, eventcb, NULL);
+    printf("after setting cb\n");
+    // connect to socket (this makes it nonblocking)
+    int fd = bufferevent_socket_connect(bev, (struct sockaddr*) sin, sizeof(sin));
+    if (fd == -1) { // returns 0 on success 
+        /* Error starting connection */ 
+        printf("error connecting to socket with ip\n");
+    } else {
+        printf("connected to socket with ip\n");
+    }
+}
+
 
 int main() {
     //OpenSSL_add_all_algorithms(); // maybe only needed for openssl 1.0
@@ -98,14 +132,24 @@ int main() {
     char *ips[] = {"192.30.255.113","143.204.129.163" }; // github, slack (google requires SNI)
     //char *ips[] = {"192.30.255.113"}; 
     size_t n_ips = sizeof(ips)/sizeof(ips[0]);
-    
-    struct sockaddr_in* in_arr = get_tls_sites(2);
+    // create event base
+    struct event_base *base_ip = event_base_new();
 
+    for (int i = 0; i < n_ips; i++) {
+        handshake_ip(ips[i], base_ip);
+    }
+        //bufferevent_setfd(bev, fd); // TODO
+    event_base_dispatch(base_ip);
+    // event_base_loop(base);  // runs until no more events, or call break/edit
+    event_base_free(base_ip);
+   
+    //test new array of struct sockaddr 
+    struct sockaddr_in* in_arr = get_tls_sites(NUM_TLS_INS);
     // create event base
     struct event_base *base = event_base_new();
 
-    for (int i = 0; i < n_ips; i++) {
-        handshake(ips[i], base);
+    for (int i = 0; i < NUM_TLS_INS; i++) {
+        handshake(&in_arr[i], base);
     }
         //bufferevent_setfd(bev, fd); // TODO
     event_base_dispatch(base);
