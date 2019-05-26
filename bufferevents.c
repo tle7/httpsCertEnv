@@ -18,6 +18,8 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#include "get_tls_sites.h"
+
 // TODO: lots of frees, error-catching probably 
 
 int verify(X509 *leaf_cert) {
@@ -96,6 +98,8 @@ int main() {
     char *ips[] = {"192.30.255.113","143.204.129.163" }; // github, slack (google requires SNI)
     //char *ips[] = {"192.30.255.113"}; 
     size_t n_ips = sizeof(ips)/sizeof(ips[0]);
+    
+    struct sockaddr_in* in_arr = get_tls_sites(2);
 
     // create event base
     struct event_base *base = event_base_new();
