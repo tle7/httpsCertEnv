@@ -1,4 +1,5 @@
 #!/bin/bash
+timeout=30
 verification_depth=15
 nhandshakes_attempted=0
 nleaf=0
@@ -38,7 +39,7 @@ for server in ${ipv4_addrs[@]}; do
     curr_ip=`echo $server | sed -e "s/'//g"`
     echo "curr_ip: $curr_ip"
     echo -e "\n server: $server; tls version: $tls_version \n" > $outfile # TODO: remove this (but still create new file for each server: unless concurrency)
-    echo | openssl s_client -connect $curr_ip:443 -servername $curr_ip \
+    echo | timeout $timeout openssl s_client -connect $curr_ip:443 \
         -$tls_version -CAfile /etc/ssl/certs/ca-certificates.crt \
         -verify $verification_depth \
         &>> $outfile 
