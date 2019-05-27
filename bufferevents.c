@@ -20,9 +20,12 @@
 
 static int next_i = 0;
 static X509_STORE *store;
+#include "get_tls_sites.h"
+
+#define NUM_TLS_INS 900
 
 // TODO: lots of frees, error-catching probably 
-void handshake(char *ip, struct event_base *base);
+void handshake(struct sockaddr_in *sin, struct event_base *base);
 
 const char *get_validation_errstr(long e) {
 	switch ((int) e) {
@@ -179,36 +182,28 @@ void eventcb(struct bufferevent *bev, short events, void *ptr) {
     // handshake("143.204.129.163", base);  // seems to work
 }
 
-
-void handshake(char *ip, struct event_base *base) {
+void handshake(struct sockaddr_in *sin, struct event_base *base) {
      // get initial SSL*: only works if each one has their own
     SSL_CTX *ssl_context = SSL_CTX_new(TLS_client_method()); 
     // specifying version is deprecated...can't do TLS 1.3?
     SSL *ssl = SSL_new(ssl_context); // have to start somewhere...
-    // setup socket
-    struct sockaddr_in sin;
-    memset(&sin, 0, sizeof(sin)); // perhaps pre-compute this: array of sockaddrs instead of IPs?
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = inet_addr(ip); // github 
-    sin.sin_port = htons(443);
-
     struct bufferevent *bev = bufferevent_openssl_socket_new(base, -1, ssl, 
 			BUFFEREVENT_SSL_CONNECTING,
 			BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS); 
     if (!bev) {
-        printf("error in openssl_socket_new with ip %s\n", ip);
+        printf("error in openssl_socket_new with ip\n");
     }
    
     // set callback
     bufferevent_setcb(bev, NULL, NULL, eventcb, NULL);
     printf("after setting cb\n");
     // connect to socket (this makes it nonblocking)
-    int fd = bufferevent_socket_connect(bev, (struct sockaddr *)&sin, sizeof(sin));
+    int fd = bufferevent_socket_connect(bev, (struct sockaddr*) sin, sizeof(struct sockaddr_in));
     if (fd == -1) { // returns 0 on success 
         /* Error starting connection */ 
-        printf("error connecting to socket with ip %s\n", ip);
+        printf("error connecting to socket with ip\n");
     } else {
-        printf("connected to socket with ip %s\n", ip);
+        printf("connected to socket with ip\n");
     }
 }
 
@@ -220,6 +215,7 @@ int main() {
     char *ips[] = {"172.217.6.78","192.30.255.113"}; // google (requires SNI),  github
     size_t n_ips = sizeof(ips) / sizeof(ips[0]);
 
+    struct sockaddr_in* in_arr = get_tls_sites(NUM_TLS_INS);
     // create event base
     struct event_base *base = event_base_new();
 
@@ -229,8 +225,8 @@ int main() {
     }
 
     // do initial 2500 handshakes
-    for (int i = 0; i < n_ips; i++) {
-        handshake(ips[i], base);
+    for (int i = 0; i < NUM_TLS_INS; i++) {
+        handshake(&in_arr[i], base);
     }
     event_base_dispatch(base);
     // event_base_loop(base);  // runs until no more events, or call break/edit

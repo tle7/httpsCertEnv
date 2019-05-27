@@ -1,6 +1,5 @@
 PROGRAMS = bufferevents
 
-all:: $(PROGRAMS)
 
 CC = gcc
 CFLAGS = -g3 -O0 -std=gnu99 -Wall $$warnflags
@@ -8,10 +7,14 @@ export warnflags = -Wfloat-equal -Wtype-limits -Wpointer-arith -Wlogical-op -Wsh
 LDFLAGS = 
 LDLIBS = -lssl -lcrypto -levent -levent_openssl
 
-$(PROGRAMS): %:%.c
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+all: bufferevents
 
-clean::
-	rm -f $(PROGRAMS) *.o
+bufferevents: get_tls_sites.o bufferevents.o
+		$(CC) $(CFLAGS) $(LDFLAGS)$^ $(LDLIBS) -o bufferevents
+get_tls_sites.o: get_tls_sites.c
+		gcc -c get_tls_sites.c
+bufferevents.o: bufferevents.c
+		gcc -c bufferevents.c
 
-.PHONY: clean all
+clean:
+	rm -rf *.o bufferevents
