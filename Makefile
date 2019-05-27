@@ -9,8 +9,12 @@ LDLIBS = -lssl -lcrypto -levent -levent_openssl
 
 all: bufferevents
 
-bufferevents: get_tls_sites.o bufferevents.o
+bufferevents: hash.o list.o get_tls_sites.o bufferevents.o
 		$(CC) $(CFLAGS) $(LDFLAGS)$^ $(LDLIBS) -o bufferevents
+hash.o: hash.c
+		gcc -c hash.c
+list.o: hash.c
+		gcc -c list.c
 get_tls_sites.o: get_tls_sites.c
 		gcc -c get_tls_sites.c
 bufferevents.o: bufferevents.c

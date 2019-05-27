@@ -18,14 +18,60 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#include "get_tls_sites.h"
+#include "hash.h"
+#include <assert.h>
+#define NUM_TLS_INS 900
+
+
+typedef struct {
+    const char *name; // malloc
+    size_t nsigned;
+    struct hash_elem hash_elem;
+} CA;
+
+struct hash *CAs;
+
 static int next_i = 0;
 static X509_STORE *store;
-#include "get_tls_sites.h"
-
-#define NUM_TLS_INS 900
+static size_t nhandshakes = 0;
+static size_t ntrusted = 0;
 
 // TODO: lots of frees, error-catching probably 
 void handshake(struct sockaddr_in *sin, struct event_base *base);
+
+unsigned CA_hash(const struct hash_elem *elem, void *aux) {
+    const CA *ca = hash_entry (elem, CA, hash_elem);
+    return hash_string (ca->name);
+}
+
+bool CA_less(const struct hash_elem *a_, const struct hash_elem *b_,
+               void *aux) {
+    const CA *a = hash_entry (a_, CA, hash_elem);
+    const CA *b = hash_entry (b_, CA, hash_elem);
+
+    return strcmp(a->name, b->name) < 0;
+}
+
+void CA_print(struct hash_elem *a, void *aux) {
+    CA *ca = hash_entry(a, CA, hash_elem);
+    printf("%s: %zu\n", ca->name, ca->nsigned);
+}
+
+
+// adds new CA or increments nsigned for existing one
+void insert_CA(const char *name) { 
+    CA *new_CA = malloc(sizeof(CA));
+    assert(new_CA);
+    new_CA->name = name;
+    new_CA->nsigned = 1;
+    struct hash_elem *found = hash_insert(CAs, &new_CA->hash_elem); // returns NULL if not found/inserted
+    if (found) {
+        new_CA->nsigned = hash_entry(found, CA, hash_elem)->nsigned + 1; // increment nsigned
+        hash_replace(CAs, &new_CA->hash_elem);
+    } 
+    // hash_apply(CAs, CA_print); // tested
+}
 
 const char *get_validation_errstr(long e) {
 	switch ((int) e) {
@@ -127,10 +173,13 @@ void verify(SSL *ssl, X509 *leaf_cert) {
         fprintf(stderr, "unable to create STORE CTX\n"); // record this as error
         return;
     }
-    // int X509_STORE_CTX_init(X509_STORE_CTX *ctx, X509_STORE *store,
-                        // X509 *x509, STACK_OF(X509) *chain);
                         
-    STACK_OF(X509) *chain = SSL_get_peer_cert_chain(ssl); // this may be NULL: If so, push the cert?
+    STACK_OF(X509) *chain = SSL_get_peer_cert_chain(ssl); 
+    if (!chain) {
+        chain = sk_X509_new_null();
+        sk_X509_push(chain, leaf_cert);
+    }
+        
     int rc = X509_STORE_CTX_init(ctx, store, leaf_cert, chain);
     if (rc != 1) {
         fprintf(stderr, "unable to initialize STORE CTX.\n");
@@ -142,21 +191,27 @@ void verify(SSL *ssl, X509 *leaf_cert) {
         printf("error in verify \n");
     } else if (ret == 1) {
         printf("VALID CERT\n");
+        ntrusted++; 
     } else {
-        int err = X509_STORE_CTX_get_error(ctx); // TODO: test this
-        printf("%s\n", get_validation_errstr(err));
+        int err = X509_STORE_CTX_get_error(ctx); // tested with google 
+        printf("%s\n", get_validation_errstr(err)); // TODO: record reason
     }
 
     X509_STORE_CTX_free(ctx);
 }
 
-void CAs(X509 *leaf_cert) {
+void record_CAs(X509 *leaf_cert) {
     char *subject = X509_NAME_oneline(X509_get_subject_name(leaf_cert), NULL, 0); 
     // use blog code to parse fields (e.g. location)
-    char *issuer = X509_NAME_oneline(X509_get_issuer_name(leaf_cert), NULL, 0);
-    printf("subject: %s\n", subject);
+    //char *issuer = X509_NAME_oneline(X509_get_issuer_name(leaf_cert), NULL, 0);
+    X509_NAME *issuer_full = X509_get_issuer_name(leaf_cert);
+    X509_NAME_ENTRY *issuer_O = X509_NAME_get_entry(issuer_full, 1); // TODO: check for <2 entries
+    ASN1_STRING *d = X509_NAME_ENTRY_get_data(issuer_O);
+	const char *issuer = strdup(ASN1_STRING_get0_data(d)); 
+    // printf("issuer: %s\n", issuer);
+    insert_CA(issuer);
     OPENSSL_free(subject);
-    OPENSSL_free(issuer);
+    // TODO: what needs to be freed in this ridiculous interface
 }
 
 void eventcb(struct bufferevent *bev, short events, void *ptr) {
@@ -165,21 +220,22 @@ void eventcb(struct bufferevent *bev, short events, void *ptr) {
         printf("connected!!!\n");
         SSL *ssl = bufferevent_openssl_get_ssl(bev);
         X509 *leaf_cert = SSL_get_peer_certificate(ssl); 
+        nhandshakes++;
         // if returns NULL, count that has handshake failure?
         verify(ssl, leaf_cert);
-        CAs(leaf_cert);
+        record_CAs(leaf_cert);
 
     } else if (events & BEV_EVENT_ERROR) {
     /* An error occured while connecting. */
         printf("error connecting in cb\n"); // count this as handshake failure too?
         unsigned long err = bufferevent_get_openssl_error(bev);
-    } // TODO: need to handle other possibilities? 
+    } // TODO: need to handle other possibilities? also impose timeout 
     //SSL_CTX_free(ssl_context); // TODO: should do this
     
     // next connection
     struct event_base *base = bufferevent_get_base(bev);
     bufferevent_free(bev); // closes socket since close_on_free is set
-    // handshake("143.204.129.163", base);  // seems to work
+    // handshake("143.204.129.163", base);  // TODO: next one in array (this seems to work)
 }
 
 void handshake(struct sockaddr_in *sin, struct event_base *base) {
@@ -213,9 +269,21 @@ int main() {
     //char *ips[] = {"192.30.255.113","143.204.129.163" }; // github, slack 
     //char *ips[] = {"192.30.255.113"}; 
     char *ips[] = {"172.217.6.78","192.30.255.113"}; // google (requires SNI),  github
-    size_t n_ips = sizeof(ips) / sizeof(ips[0]);
+    size_t num_sites = sizeof(ips) / sizeof(ips[0]);
 
-    struct sockaddr_in* in_arr = get_tls_sites(NUM_TLS_INS);
+    //struct sockaddr_in* in_arr = get_tls_sites(NUM_TLS_INS);
+    struct sockaddr_in* in_arr = calloc(num_sites, sizeof(struct sockaddr_in));
+
+    for (int i = 0; i < num_sites; i++) {
+        in_arr[i].sin_family = AF_INET;
+        in_arr[i].sin_port = htons(443);
+        in_arr[i].sin_addr.s_addr = inet_addr(ips[i]);
+    }
+
+    // init CA hash table
+    CAs = malloc (sizeof (struct hash));
+    assert(CAs);
+    hash_init(CAs, CA_hash, CA_less, NULL);
     // create event base
     struct event_base *base = event_base_new();
 
@@ -225,11 +293,15 @@ int main() {
     }
 
     // do initial 2500 handshakes
-    for (int i = 0; i < NUM_TLS_INS; i++) {
+    //for (int i = 0; i < NUM_TLS_INS; i++) {
+  
+    for (int i = 0; i < num_sites; i++) {
         handshake(&in_arr[i], base);
     }
     event_base_dispatch(base);
+
     // event_base_loop(base);  // runs until no more events, or call break/edit
     event_base_free(base);
+    // TODO: free hash table (and its names)
     return 0;
 }
