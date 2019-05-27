@@ -116,7 +116,7 @@ void handshake(struct sockaddr_in *sin, struct event_base *base) {
     bufferevent_setcb(bev, NULL, NULL, eventcb, NULL);
     printf("after setting cb\n");
     // connect to socket (this makes it nonblocking)
-    int fd = bufferevent_socket_connect(bev, (struct sockaddr*) sin, sizeof(sin));
+    int fd = bufferevent_socket_connect(bev, (struct sockaddr*) sin, sizeof(struct sockaddr_in));
     if (fd == -1) { // returns 0 on success 
         /* Error starting connection */ 
         printf("error connecting to socket with ip\n");
