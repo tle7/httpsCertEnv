@@ -32,6 +32,7 @@ struct sockaddr_in* get_tls_sites(int num_sites) { //if -1, return all sites
         fgets_ret = fgets(ip_buf, IP_ADDR_LEN, fp);
 	if (!fgets_ret) {
 	    printf("reading csv finished early");
+	    fclose(fp);
 	    return arr;
  	}
 	size_t curr_ip_len = strlen(ip_buf);
@@ -44,5 +45,6 @@ struct sockaddr_in* get_tls_sites(int num_sites) { //if -1, return all sites
 	curr_in->sin_addr.s_addr = inet_addr(ip_buf);
 	curr_in->sin_port = htons(HTTPS_PORT);
     }
+    fclose(fp);
     return arr;
 }
