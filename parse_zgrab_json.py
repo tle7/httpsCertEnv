@@ -1,4 +1,5 @@
 import json
+import operator
 
 total_jsons = 0
 hs_success = 0
@@ -44,6 +45,8 @@ def parse_json_certs(zgrab_out_file):
 
     with open(zgrab_out_file) as json_f:
         for json_str in json_f:
+            if json_str[-2] != "}":
+                break
             curr_json = json.loads(json_str)
             curr_data = curr_json["data"]
             curr_tls = curr_data["tls"]
@@ -126,11 +129,16 @@ def iterate_json_keys(obj):
                 print(v)
             #handle checking for keys -- should encure unique
 
+def sort_map(curr_map):
+    return sorted(curr_map.items(), key=operator.itemgetter(1), reverse=True)
+
+def sum_map_values(curr_map):
+    return sum(list(curr_map.values()))
 
 if __name__=='__main__':
     total_jsons = 0
-    for ind in range(0, 4+1):
-        curr_file = "244_final_zgrab/zgrab_full_scan_s" + str(ind) + ".json" 
+    for ind in range(340812, 681623+1):
+        curr_file = "zgrab_output/zgrab_out" + str(ind) + ".json" 
         parse_json_certs(curr_file)
     print ("number total jsons: " + str(total_jsons))
     print ("hs_success: " + str(hs_success))
@@ -138,11 +146,27 @@ if __name__=='__main__':
     print ("known errors: " + str(known_errors))
     print ("known_error_reasons: " + str(known_error_reasons))
     print ("unknown_error_reasons: " + str(unknown_error_reasons))
-    print ("tls_vers: " + str(tls_vers))
+    print ()
+
+    print ("tls_vers: " + str(sort_map(tls_vers)))
+    print()
+
     print ("browser trusted certs: " + str(browser_trusted_certs))
-    print ("signature algs: " + str(signature_algs))
-    print ("org_names: " + str(org_names))
-    print ("key algs: " + str(key_algs))
+    print()
+
+    print ("signature algs: " + str(sort_map(signature_algs)))
+    print ("tot sig algs: " + str(sum_map_values(signature_algs)))
+    print()
+    
+
+    print ("org_names: " + str(sort_map(org_names)))
+    print ("tot org names: " + str(sum_map_values(org_names)))
+    print()
+
+    print ("key algs: " + str(sort_map(key_algs)))
+    print ("tot key algs: " + str(sum_map_values(key_algs)))
+    print()
+
     print ("leaf_rsa_key_lens: " + str(leaf_rsa_key_lens))
     print ("leaf_ecdsa_key_lens" + str(leaf_ecdsa_key_lens))
     print ("leaf_ecdsa_curve_types: " + str(leaf_ecdsa_curve_types))
